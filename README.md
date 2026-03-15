@@ -1,5 +1,7 @@
 # K-Means Colors Toy
 
+**Live demo: https://vovanz.github.io/k-means-colors-toy/**
+
 A browser-based tool that extracts a color palette from any image using the k-means clustering algorithm, with a live animation showing the algorithm converge in real time.
 
 ## What it does
