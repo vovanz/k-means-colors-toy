@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>K-Means Colors</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="upload-prompt">
+        <label id="upload-label" for="file-input">
+          <div class="upload-icon">🖼</div>
+          <div class="upload-text">Drop an image or click to upload</div>
+          <div class="upload-hint">JPG, PNG, WebP, GIF and other browser-native formats</div>
+          <input type="file" id="file-input" accept="image/*" />
+        </label>
+      </div>
+
+      <div id="workspace" hidden>
+        <div id="controls">
+          <label for="speed-input">
+            Iteration speed:
+            <input type="number" id="speed-input" min="10" max="2000" step="10" value="100" />
+            ms
+          </label>
+        </div>
+
+        <div id="canvas-area">
+          <div class="canvas-wrapper">
+            <div class="canvas-label">Original</div>
+            <img id="original-image" alt="Original" />
+          </div>
+          <div class="canvas-wrapper">
+            <div class="canvas-label">K-Means</div>
+            <canvas id="output-canvas"></canvas>
+          </div>
+        </div>
+
+        <div id="palette-area">
+          <div id="palette-label">Palette <span id="palette-hint">(click image to add colors)</span></div>
+          <div id="palette"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
