@@ -8,39 +8,53 @@
   </head>
   <body>
     <div id="app">
+      <!-- Shared file input – referenced by both the big label and the toolbar button -->
+      <input type="file" id="file-input" accept="image/*" />
+
+      <!-- Full-screen upload prompt (shown before any image is loaded) -->
       <div id="upload-prompt">
         <label id="upload-label" for="file-input">
           <div class="upload-icon">🖼</div>
           <div class="upload-text">Drop an image or click to upload</div>
           <div class="upload-hint">JPG, PNG, WebP, GIF and other browser-native formats</div>
-          <input type="file" id="file-input" accept="image/*" />
         </label>
       </div>
 
-      <div id="workspace" hidden>
-        <div id="controls">
-          <label for="speed-input">
-            Iteration speed:
-            <input type="number" id="speed-input" min="10" max="2000" step="10" value="100" />
-            ms
-          </label>
+      <!-- Workspace (shown after image is loaded) -->
+      <div id="workspace" hidden data-layout="horizontal">
+
+        <!-- Left/main column: tiny toolbar + the two canvases -->
+        <div id="main-col">
+          <div id="toolbar">
+            <label id="change-image-btn" for="file-input">&#8635; Change image</label>
+          </div>
+          <div id="canvas-area">
+            <div class="canvas-wrapper">
+              <div class="canvas-label">Original</div>
+              <img id="original-image" alt="Original" />
+            </div>
+            <div class="canvas-wrapper">
+              <div class="canvas-label">K-Means</div>
+              <canvas id="output-canvas"></canvas>
+            </div>
+          </div>
         </div>
 
-        <div id="canvas-area">
-          <div class="canvas-wrapper">
-            <div class="canvas-label">Original</div>
-            <img id="original-image" alt="Original" />
+        <!-- Sidebar: speed control + palette -->
+        <div id="sidebar">
+          <div id="speed-control">
+            <label for="speed-input">
+              Speed
+              <input type="number" id="speed-input" min="10" max="2000" step="10" value="100" />
+              ms
+            </label>
           </div>
-          <div class="canvas-wrapper">
-            <div class="canvas-label">K-Means</div>
-            <canvas id="output-canvas"></canvas>
+          <div id="palette-area">
+            <div id="palette-label">Palette <span id="palette-hint">(click image to add)</span></div>
+            <div id="palette"></div>
           </div>
         </div>
 
-        <div id="palette-area">
-          <div id="palette-label">Palette <span id="palette-hint">(click image to add colors)</span></div>
-          <div id="palette"></div>
-        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

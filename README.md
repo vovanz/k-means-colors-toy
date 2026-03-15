@@ -10,9 +10,19 @@ Upload an image and the app immediately begins clustering its pixels by color. A
 
 - **Add a color** — click any pixel on the original image. A new cluster is seeded at that pixel's color and the algorithm continues from its current state without resetting.
 - **Remove a color** — hover over a palette swatch and click the × button. Pixels that belonged to that cluster are reassigned to the nearest remaining cluster, then the algorithm continues.
-- **Adjust speed** — change the iteration interval (default 100 ms) using the input in the top bar. Takes effect on the next iteration without restarting.
+- **Adjust speed** — change the iteration interval (default 100 ms) using the number input in the sidebar. Takes effect on the next iteration without restarting.
+- **Change image** — use the small "↻ Change image" button in the toolbar at any time.
 
 The animation stops automatically once the algorithm has fully converged (no pixel changes cluster between two consecutive iterations). Adding or removing a cluster resumes it.
+
+## Responsive layout
+
+The page fills the viewport without scrolling. The two canvases (original and k-means) are arranged either side-by-side or stacked depending on which orientation wastes less screen space:
+
+- **Horizontal** (side-by-side): used when the screen is wide relative to the image — `screenAspect > 1.25 × imageAspect`. The speed control and palette appear below the canvases.
+- **Vertical** (stacked): used when the screen is tall relative to the image. The speed control and palette appear in a sidebar to the right.
+
+The layout recalculates on every window resize. Both canvases scale to fill the available space at all times.
 
 ## How it works
 
