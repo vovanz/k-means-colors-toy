@@ -201,16 +201,42 @@ html, body {
   min-height: 0;
 }
 
+#palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 #palette-label {
   font-size: 0.8rem;
   font-weight: 600;
-  flex-shrink: 0;
 }
 
 #palette-hint {
   font-size: 0.75rem;
   font-weight: 400;
   color: #777;
+}
+
+#export-btn {
+  padding: 0.2rem 0.6rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.4rem;
+  color: #aaa;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#export-btn:hover {
+  background: #333;
+  border-color: #555;
+  color: #e0e0e0;
 }
 
 #palette {

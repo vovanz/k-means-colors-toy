@@ -1,5 +1,6 @@
 import { config, hslPresets } from './config';
 import { type Color, type DistanceFn, rgbDistance, makeHslDistance, labDistance } from './distance';
+import { nearestCssName } from './colorNames';
 import { type KMeansState, initState, addCentroid, reassignAfterDeletion, changeMetric } from './kmeans';
 import { loadImageFromFile, resizeToMaxPixels, extractPixels, averageColor } from './imageUtils';
 import { renderClusters } from './canvasRenderer';
@@ -108,6 +109,29 @@ function handleMetricChange(distanceFn: DistanceFn) {
   ensureLoop();
 }
 
+function buildCssExport(centroids: Color[]): string {
+  const rawNames = centroids.map(nearestCssName);
+
+  // Count how many palette entries map to each name.
+  const counts = new Map<string, number>();
+  for (const n of rawNames) counts.set(n, (counts.get(n) ?? 0) + 1);
+
+  // Assign final variable names; add -0/-1/-2 suffix only when duplicated.
+  const counters = new Map<string, number>();
+  const varNames = rawNames.map(name => {
+    if (counts.get(name)! === 1) return name;
+    const idx = counters.get(name) ?? 0;
+    counters.set(name, idx + 1);
+    return `${name}-${idx}`;
+  });
+
+  const lines = centroids.map((c, i) => {
+    const hex = '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+    return `  --custom-${varNames[i]}: ${hex};`;
+  });
+  return `:root {\n${lines.join('\n')}\n}`;
+}
+
 async function handleFileUpload(file: File) {
   state.loop?.stop();
 
@@ -187,6 +211,17 @@ export function mount() {
   metricSelect.addEventListener('change', () => {
     const m = metrics[metricSelect.selectedIndex];
     if (m) handleMetricChange(m.fn);
+  });
+
+  // Export CSS button
+  const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+  exportBtn.addEventListener('click', () => {
+    if (!state.kmeans) return;
+    const css = buildCssExport(state.kmeans.centroids);
+    navigator.clipboard.writeText(css).then(() => {
+      exportBtn.textContent = 'Copied!';
+      setTimeout(() => { exportBtn.textContent = 'Export CSS'; }, 1500);
+    });
   });
 
   // Window resize → recalculate layout
