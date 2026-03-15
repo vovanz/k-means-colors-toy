@@ -1,71 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>K-Means Colors</title>
-    <link rel="stylesheet" href="/src/style.css" />
-  </head>
-  <body>
-    <div id="app">
-      <!-- Shared file input – referenced by both the big label and the toolbar button -->
-      <input type="file" id="file-input" accept="image/*" />
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>K-Means Colors</title>
+        <link rel="stylesheet" href="/src/style.css" />
+    </head>
+    <body>
+        <div id="app">
+            <!-- Shared file input – referenced by both the big label and the toolbar button -->
+            <input type="file" id="file-input" accept="image/*" />
 
-      <!-- Full-screen upload prompt (shown before any image is loaded) -->
-      <div id="upload-prompt">
-        <label id="upload-label" for="file-input">
-          <div class="upload-icon">🖼</div>
-          <div class="upload-text">Drop an image or click to upload</div>
-          <div class="upload-hint">JPG, PNG, WebP, GIF and other browser-native formats</div>
-        </label>
-      </div>
-
-      <!-- Workspace (shown after image is loaded) -->
-      <div id="workspace" hidden data-layout="horizontal">
-
-        <!-- Left/main column: tiny toolbar + the two canvases -->
-        <div id="main-col">
-          <div id="toolbar">
-            <label id="change-image-btn" for="file-input">&#8635; Change image</label>
-          </div>
-          <div id="canvas-area">
-            <div class="canvas-wrapper">
-              <div class="canvas-label">Original</div>
-              <div id="original-image-wrapper">
-                <img id="original-image" alt="Original" />
-                <canvas id="selection-overlay"></canvas>
-              </div>
+            <!-- Full-screen upload prompt (shown before any image is loaded) -->
+            <div id="upload-prompt">
+                <label id="upload-label" for="file-input">
+                    <div class="upload-icon">🖼</div>
+                    <div class="upload-text">
+                        Drop an image or click to upload
+                    </div>
+                    <div class="upload-hint">
+                        JPG, PNG, WebP, GIF and other browser-native formats
+                    </div>
+                </label>
             </div>
-            <div class="canvas-wrapper">
-              <div class="canvas-label">K-Means</div>
-              <canvas id="output-canvas"></canvas>
+
+            <!-- Workspace (shown after image is loaded) -->
+            <div id="workspace" hidden data-layout="horizontal">
+                <!-- Left/main column: tiny toolbar + the two canvases -->
+                <div id="main-col">
+                    <div id="toolbar">
+                        <label id="change-image-btn" for="file-input"
+                            >&#8635; Change image</label
+                        >
+                        <div id="mode-switch">
+                            <button id="mode-add" class="mode-btn active">
+                                Add cluster
+                            </button>
+                            <button id="mode-important" class="mode-btn">
+                                Important region
+                            </button>
+                        </div>
+                    </div>
+                    <div id="canvas-area">
+                        <div class="canvas-wrapper">
+                            <div class="canvas-label">Original</div>
+                            <div id="original-image-wrapper">
+                                <img id="original-image" alt="Original" />
+                                <canvas id="selection-overlay"></canvas>
+                            </div>
+                        </div>
+                        <div class="canvas-wrapper">
+                            <div class="canvas-label">K-Means</div>
+                            <canvas id="output-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar: metric selector, speed control + palette -->
+                <div id="sidebar">
+                    <div id="metric-control">
+                        <label for="metric-select"
+                            >Distance
+                            <select id="metric-select"></select
+                        ></label>
+                    </div>
+                    <div id="speed-control">
+                        <label for="speed-input">
+                            Speed
+                            <input
+                                type="number"
+                                id="speed-input"
+                                min="10"
+                                max="2000"
+                                step="10"
+                                value="100"
+                            />
+                            ms
+                        </label>
+                    </div>
+                    <div id="coord-control">
+                        <label for="coord-input">
+                            Spatial
+                            <input type="range" id="coord-input" min="0" max="2.5" step="0.01" value="0" />
+                            <span id="coord-value">0.00</span>
+                        </label>
+                    </div>
+                    <div id="palette-area">
+                        <div id="palette-header">
+                            <div id="palette-label">
+                                Palette
+                                <span id="palette-hint"
+                                    >(drag image to add)</span
+                                >
+                            </div>
+                            <button id="export-btn">Export CSS</button>
+                        </div>
+                        <div id="palette"></div>
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
-
-        <!-- Sidebar: metric selector, speed control + palette -->
-        <div id="sidebar">
-          <div id="metric-control">
-            <label for="metric-select">Distance <select id="metric-select"></select></label>
-          </div>
-          <div id="speed-control">
-            <label for="speed-input">
-              Speed
-              <input type="number" id="speed-input" min="10" max="2000" step="10" value="100" />
-              ms
-            </label>
-          </div>
-          <div id="palette-area">
-            <div id="palette-header">
-              <div id="palette-label">Palette <span id="palette-hint">(drag image to add)</span></div>
-              <button id="export-btn">Export CSS</button>
-            </div>
-            <div id="palette"></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
 </html>

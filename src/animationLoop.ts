@@ -12,6 +12,7 @@ export function startLoop(
   onFrame: (s: KMeansState) => void,
   iterationMs: () => number,
   getDistanceFn: () => DistanceFn,
+  getCoordWeight: () => number,
 ): LoopHandle {
   let running = true;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -26,7 +27,7 @@ export function startLoop(
     }
 
     const t0 = performance.now();
-    const next = step(current, getDistanceFn());
+    const next = step(current, getDistanceFn(), getCoordWeight());
     const elapsed = performance.now() - t0;
 
     setState(next);

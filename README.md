@@ -8,12 +8,57 @@ Upload an image and the app immediately begins clustering its pixels by color. A
 
 **Interaction:**
 
-- **Add a color** — click or drag a rectangle on the original image (touch supported). All pixels within the selection are pre-assigned to a new cluster seeded at their average color; the first frame shows this state before any reassignment, then normal k-means stepping resumes. Any existing cluster that loses all its pixels to the selection is removed automatically.
+- **Add a color** — click or drag a rectangle on the original image (touch supported) while in **Add cluster** mode. All pixels within the selection are pre-assigned to a new cluster seeded at their weighted average color; the first frame shows this state before any reassignment, then normal k-means stepping resumes. Any existing cluster that loses all its pixels to the selection is removed automatically.
+- **Important region** — switch to **Important region** mode and drag a rectangle on the original image. The selected rectangle is stored as a persistent orange outline and biases centroid updates toward colors inside that region.
 - **Remove a color** — hover over a palette swatch and click the × button. Pixels that belonged to that cluster are reassigned to the nearest remaining cluster, then the algorithm continues.
 - **Adjust speed** — change the iteration interval (default 100 ms) using the number input in the sidebar. Takes effect on the next iteration without restarting.
-- **Change image** — use the small "↻ Change image" button in the toolbar at any time.
+- **Spatial weight** — drag the "Spatial" slider (0.00–2.50) to bias clustering toward spatially adjacent pixels. At 0 the algorithm is pure color distance; higher values cause geographically nearby pixels to cluster together even if their colors differ.
+- **Change image** — use the small "↻ Change image" button in the toolbar at any time. Loading a new image clears any previously selected important region.
 
-The animation stops automatically once the algorithm has fully converged (no pixel changes cluster between two consecutive iterations). Adding or removing a cluster resumes it.
+The animation stops automatically once the algorithm has fully converged (no pixel changes cluster between two consecutive iterations). Adding/removing a cluster or changing region weights resumes it.
+
+## Important region mode
+
+The toolbar includes a segmented mode switch:
+
+- **Add cluster** (default): drag adds a new cluster from the selected area.
+- **Important region**: drag replaces the current important region.
+
+Only one important region exists at a time. Dragging a new region replaces the old one.
+
+The important region is rendered on the original-image overlay as a persistent solid orange border:
+
+- color: `rgba(255, 140, 0, 0.85)`
+- line width: `2`
+- style: solid
+
+This is visually distinct from the temporary white dashed selection rectangle used during drag.
+
+## Weighted centroid behavior
+
+Let:
+
+- `N` = total number of pixels in the image
+- `M` = number of pixels in the important region
+
+Weights are defined as:
+
+- Important pixel weight: `N / M`
+- Normal pixel weight: `1`
+
+If no important region is set, weights are effectively all `1` (same behavior as standard k-means).
+
+### Where weights are applied
+
+Weights affect **centroid recomputation** (the Update step), using weighted channel means:
+
+- `centroid[c].R = sum(R_i * w_i) / sum(w_i)`
+- `centroid[c].G = sum(G_i * w_i) / sum(w_i)`
+- `centroid[c].B = sum(B_i * w_i) / sum(w_i)`
+
+Weights do **not** affect **pixel assignment** (the Assign step). Pixel-to-cluster assignment still uses plain nearest-centroid distance under the selected metric.
+
+Weights also apply when adding a cluster from rectangle selection: because centroid recomputation is weighted, the new cluster's initial color reflects weighted averages if the selection overlaps the important region.
 
 ## Responsive layout
 
@@ -31,7 +76,7 @@ The layout recalculates on every window resize. Both canvases scale to fill the 
 K-means partitions a set of points into *k* clusters by repeatedly doing two things:
 
 1. **Assign** — each point is assigned to the cluster whose centroid is nearest.
-2. **Update** — each centroid is recomputed as the mean of all points assigned to it.
+2. **Update** — each centroid is recomputed as the mean of all points assigned to it (weighted mean when an important region is active).
 
 These two steps alternate until no point changes cluster (convergence).
 
@@ -54,7 +99,21 @@ Three presets with different `wH / wS / wL` weights are available and configurab
 
 Centroid positions are always averaged in RGB space regardless of the active metric. This is a pragmatic simplification — proper Lab or HSL means would require extra conversion steps.
 
-The initial state has a single cluster whose centroid is the average color of the entire image. Dragging a rectangle on the original image adds a new cluster from the selected region.
+The initial state has a single cluster whose centroid is the average color of the entire image. Dragging a rectangle on the original image in **Add cluster** mode adds a new cluster from the selected region.
+
+### Spatial coordinate distance
+
+Each pixel can optionally be treated as a **5D point** `[R, G, B, X, Y]`, where `X` and `Y` are its image-pixel coordinates. The "Spatial" slider controls a weight `w` that scales the coordinate contribution:
+
+```
+d(pixel, centroid) = sqrt(
+    colorDist(pixel_rgb, centroid_rgb)²
+  + w × (px − cx)²
+  + w × (py − cy)²
+)
+```
+
+At `w = 0` the algorithm is identical to pure color clustering. As `w` increases, spatially adjacent pixels are more likely to end up in the same cluster even when their colors differ. Spatial centroid coordinates `(cx, cy)` are the unweighted mean of the pixel coordinates assigned to each cluster, recomputed every step.
 
 ### Animation timing
 
@@ -81,7 +140,7 @@ Applied only when the image exceeds the limit. This keeps the k-means loop fast 
 src/
   config.ts          — maxPixels and defaultIterationMs constants
   distance.ts        — Euclidean RGB distance function (pure, no deps)
-  kmeans.ts          — pure k-means state machine
+  kmeans.ts          — pure k-means state machine (with optional pixel weights)
   imageUtils.ts      — load, resize, extract pixels, compute average color
   canvasRenderer.ts  — paints the output canvas from cluster assignments
   paletteUI.ts       — renders palette swatches with delete buttons
@@ -91,19 +150,9 @@ src/
   style.css          — layout and visual styles
 ```
 
-The k-means algorithm (`kmeans.ts`) and the distance function (`distance.ts`) are entirely pure — no DOM access, no side effects, no global state. Every k-means function takes a state object and returns a new one:
+The k-means algorithm (`kmeans.ts`) and distance functions (`distance.ts`) are pure — no DOM access, no side effects, no global state. Every k-means function takes a state object and returns a new one.
 
-```
-initState(pixels, initialCentroids)          → KMeansState
-step(state)                                  → KMeansState   (one full iteration)
-addCentroid(state, color)                    → KMeansState
-addCentroidFromSelection(state, pixelIndices) → KMeansState
-reassignAfterDeletion(state, index)          → KMeansState
-```
-
-`animationLoop.ts` owns the timing and calls `step()` in a loop. It knows nothing about the DOM — it receives getter/setter closures for state and a callback to invoke after each frame. `app.ts` wires everything together and owns the single mutable state object.
-
-### Data flow
+## Data flow
 
 ```
 File upload
@@ -111,7 +160,7 @@ File upload
   └─ resizeToMaxPixels()   ──► <img> shown to user
   └─ extractPixels()       ──► Color[] (stored once, never mutated)
   └─ averageColor()
-  └─ initState([avgColor]) ──► KMeansState
+  └─ initState([avgColor]) ──► KMeansState (weights = null)
   └─ startLoop()
         └─ step(state) ──► new KMeansState
               ├─ renderClusters() ──► <canvas>
@@ -119,9 +168,16 @@ File upload
               └─ wait / next tick
               └─ converged? stop.
 
-Rectangle drag on original image
+Rectangle drag on original image (Add cluster mode)
   └─ addCentroidFromSelection(state, pixelIndices)
   └─ immediate repaint (first frame, pre-step)
+  └─ resume loop
+
+Rectangle drag on original image (Important region mode)
+  └─ compute region pixel indices
+  └─ build per-pixel weights array
+  └─ setWeights(state, weights)
+  └─ immediate repaint + persistent orange region border
   └─ resume loop
 
 Palette delete
@@ -139,7 +195,7 @@ npm run build     # production build → dist/
 npm run preview   # preview the production build
 ```
 
-The production build outputs exactly three files: `dist/index.html`, `dist/assets/index-[hash].js`, and `dist/assets/index-[hash].css`. No server required — open `index.html` directly or serve the `dist/` folder statically.
+The production build outputs `dist/index.html` plus hashed JS/CSS assets in `dist/assets/`. No server required — open `index.html` directly or serve the `dist/` folder statically.
 
 ## Configuration
 
