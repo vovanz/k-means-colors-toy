@@ -266,17 +266,17 @@ function handlePointerDown(event: PointerEvent) {
 function handlePointerMove(event: PointerEvent) {
   if (!isDragging) return;
 
+  const rect = selectionOverlay.getBoundingClientRect();
+  selectionOverlay.width = Math.round(rect.width);
+  selectionOverlay.height = Math.round(rect.height);
+
   redrawPersistentOverlay();
 
-  const rect = selectionOverlay.getBoundingClientRect();
-  const scaleX = selectionOverlay.width / rect.width;
-  const scaleY = selectionOverlay.height / rect.height;
-
   drawSelectionRect(
-    dragStartX * scaleX,
-    dragStartY * scaleY,
-    (event.clientX - rect.left) * scaleX,
-    (event.clientY - rect.top) * scaleY,
+    dragStartX,
+    dragStartY,
+    event.clientX - rect.left,
+    event.clientY - rect.top,
   );
 }
 
