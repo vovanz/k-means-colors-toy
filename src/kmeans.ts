@@ -75,6 +75,50 @@ export function addCentroid(state: KMeansState, newColor: Color): KMeansState {
   };
 }
 
+/**
+ * Add a new cluster by pre-assigning the given pixel indices to it.
+ * All cluster centroids (including the new one) are recomputed from the
+ * resulting assignments.  Any old cluster that lost all its pixels is removed.
+ * This produces the "first frame" state before normal k-means stepping begins.
+ */
+export function addCentroidFromSelection(
+  state: KMeansState,
+  selectedIndices: number[],
+): KMeansState {
+  if (selectedIndices.length === 0) return state;
+
+  const newClusterIndex = state.centroids.length;
+  const k = newClusterIndex + 1;
+
+  // Assign selected pixels to the new cluster.
+  const provisional = new Int32Array(state.assignments);
+  for (const idx of selectedIndices) {
+    provisional[idx] = newClusterIndex;
+  }
+
+  // Count pixels per cluster.
+  const counts = new Int32Array(k);
+  for (let i = 0; i < provisional.length; i++) counts[provisional[i]]++;
+
+  // Build compact index map, dropping empty clusters.
+  const indexMap = new Int32Array(k);
+  let newK = 0;
+  for (let c = 0; c < k; c++) {
+    indexMap[c] = counts[c] > 0 ? newK++ : -1;
+  }
+
+  // Remap all assignments.
+  const newAssignments = new Int32Array(provisional.length);
+  for (let i = 0; i < provisional.length; i++) {
+    newAssignments[i] = indexMap[provisional[i]];
+  }
+
+  // Recompute all centroids from the new assignments.
+  const newCentroids = recomputeCentroids(state.pixels, newAssignments, newK);
+
+  return { pixels: state.pixels, centroids: newCentroids, assignments: newAssignments, converged: false };
+}
+
 export function reassignAfterDeletion(
   state: KMeansState,
   deletedIndex: number,

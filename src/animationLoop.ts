@@ -41,7 +41,7 @@ export function startLoop(
     timeoutId = setTimeout(tick, wait);
   }
 
-  tick();
+  timeoutId = setTimeout(tick, iterationMs());
 
   return {
     stop() {

@@ -31,7 +31,10 @@
           <div id="canvas-area">
             <div class="canvas-wrapper">
               <div class="canvas-label">Original</div>
-              <img id="original-image" alt="Original" />
+              <div id="original-image-wrapper">
+                <img id="original-image" alt="Original" />
+                <canvas id="selection-overlay"></canvas>
+              </div>
             </div>
             <div class="canvas-wrapper">
               <div class="canvas-label">K-Means</div>
@@ -54,7 +57,7 @@
           </div>
           <div id="palette-area">
             <div id="palette-header">
-              <div id="palette-label">Palette <span id="palette-hint">(click image to add)</span></div>
+              <div id="palette-label">Palette <span id="palette-hint">(drag image to add)</span></div>
               <button id="export-btn">Export CSS</button>
             </div>
             <div id="palette"></div>

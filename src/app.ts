@@ -1,7 +1,7 @@
 import { config, hslPresets } from './config';
 import { type Color, type DistanceFn, rgbDistance, makeHslDistance, labDistance } from './distance';
 import { nearestCssName } from './colorNames';
-import { type KMeansState, initState, addCentroid, reassignAfterDeletion, changeMetric } from './kmeans';
+import { type KMeansState, initState, addCentroidFromSelection, reassignAfterDeletion, changeMetric } from './kmeans';
 import { loadImageFromFile, resizeToMaxPixels, extractPixels, averageColor } from './imageUtils';
 import { renderClusters } from './canvasRenderer';
 import { renderPalette } from './paletteUI';
@@ -35,9 +35,15 @@ const state: AppState = {
 let uploadPrompt: HTMLElement;
 let workspace: HTMLElement;
 let originalImage: HTMLImageElement;
+let selectionOverlay: HTMLCanvasElement;
 let outputCanvas: HTMLCanvasElement;
 let paletteContainer: HTMLElement;
 let speedInput: HTMLInputElement;
+
+// Drag state for rectangle selection on the original image.
+let dragStartX = 0; // CSS px relative to overlay
+let dragStartY = 0;
+let isDragging = false;
 
 // ── Layout ───────────────────────────────────────────────────────
 
@@ -83,20 +89,99 @@ function handleDeleteColor(index: number) {
   ensureLoop();
 }
 
-function handleImageClick(event: MouseEvent) {
-  if (!state.kmeans) return;
-
+function updateOverlaySize() {
   const rect = originalImage.getBoundingClientRect();
-  const scaleX = state.imageWidth / rect.width;
-  const scaleY = state.imageHeight / rect.height;
-  const x = Math.floor((event.clientX - rect.left) * scaleX);
-  const y = Math.floor((event.clientY - rect.top) * scaleY);
+  selectionOverlay.width = Math.round(rect.width);
+  selectionOverlay.height = Math.round(rect.height);
+}
 
-  const idx = y * state.imageWidth + x;
-  if (idx < 0 || idx >= state.kmeans.pixels.length) return;
+function drawSelectionRect(x1: number, y1: number, x2: number, y2: number) {
+  const ctx = selectionOverlay.getContext('2d')!;
+  ctx.clearRect(0, 0, selectionOverlay.width, selectionOverlay.height);
+  const x = Math.min(x1, x2);
+  const y = Math.min(y1, y2);
+  const w = Math.abs(x2 - x1);
+  const h = Math.abs(y2 - y1);
+  // Dark outline for contrast, then white dashed line on top.
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.setLineDash([]);
+}
 
-  state.kmeans = addCentroid(state.kmeans, state.kmeans.pixels[idx]);
+function getPixelIndicesInRect(
+  cssX1: number, cssY1: number,
+  cssX2: number, cssY2: number,
+  displayWidth: number, displayHeight: number,
+): number[] {
+  const scaleX = state.imageWidth / displayWidth;
+  const scaleY = state.imageHeight / displayHeight;
+  const ix1 = Math.max(0, Math.min(Math.floor(Math.min(cssX1, cssX2) * scaleX), state.imageWidth - 1));
+  const ix2 = Math.max(0, Math.min(Math.floor(Math.max(cssX1, cssX2) * scaleX), state.imageWidth - 1));
+  const iy1 = Math.max(0, Math.min(Math.floor(Math.min(cssY1, cssY2) * scaleY), state.imageHeight - 1));
+  const iy2 = Math.max(0, Math.min(Math.floor(Math.max(cssY1, cssY2) * scaleY), state.imageHeight - 1));
+  const indices: number[] = [];
+  for (let y = iy1; y <= iy2; y++) {
+    for (let x = ix1; x <= ix2; x++) {
+      indices.push(y * state.imageWidth + x);
+    }
+  }
+  return indices;
+}
+
+function handlePointerDown(event: PointerEvent) {
+  if (!state.kmeans) return;
+  if (event.button !== 0) return; // left button / touch only
+  event.preventDefault();
+  selectionOverlay.setPointerCapture(event.pointerId);
+  const rect = selectionOverlay.getBoundingClientRect();
+  dragStartX = event.clientX - rect.left;
+  dragStartY = event.clientY - rect.top;
+  isDragging = true;
+}
+
+function handlePointerMove(event: PointerEvent) {
+  if (!isDragging) return;
+  const rect = selectionOverlay.getBoundingClientRect();
+  const scaleX = selectionOverlay.width / rect.width;
+  const scaleY = selectionOverlay.height / rect.height;
+  drawSelectionRect(
+    dragStartX * scaleX, dragStartY * scaleY,
+    (event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY,
+  );
+}
+
+function handlePointerUp(event: PointerEvent) {
+  if (!isDragging || !state.kmeans) { isDragging = false; return; }
+  isDragging = false;
+
+  const ctx = selectionOverlay.getContext('2d')!;
+  ctx.clearRect(0, 0, selectionOverlay.width, selectionOverlay.height);
+
+  const rect = selectionOverlay.getBoundingClientRect();
+  const indices = getPixelIndicesInRect(
+    dragStartX, dragStartY,
+    event.clientX - rect.left, event.clientY - rect.top,
+    rect.width, rect.height,
+  );
+  if (indices.length === 0) return;
+
+  state.loop?.stop();
+  state.kmeans = addCentroidFromSelection(state.kmeans, indices);
+  render(state.kmeans);
   ensureLoop();
+}
+
+function handlePointerCancel() {
+  if (!isDragging) return;
+  isDragging = false;
+  const ctx = selectionOverlay.getContext('2d')!;
+  ctx.clearRect(0, 0, selectionOverlay.width, selectionOverlay.height);
 }
 
 function handleMetricChange(distanceFn: DistanceFn) {
@@ -150,12 +235,14 @@ async function handleFileUpload(file: File) {
   outputCanvas.height = resized.height;
 
   state.kmeans = initState(pixels, [avgColor], state.distanceFn);
-  render(state.kmeans);
 
   uploadPrompt.hidden = true;
   workspace.hidden = false;
 
   applyLayout();
+  // Sync overlay canvas size after layout is applied.
+  requestAnimationFrame(updateOverlaySize);
+  render(state.kmeans);
   ensureLoop();
 }
 
@@ -165,6 +252,7 @@ export function mount() {
   uploadPrompt = document.getElementById('upload-prompt')!;
   workspace = document.getElementById('workspace')!;
   originalImage = document.getElementById('original-image') as HTMLImageElement;
+  selectionOverlay = document.getElementById('selection-overlay') as HTMLCanvasElement;
   outputCanvas = document.getElementById('output-canvas') as HTMLCanvasElement;
   paletteContainer = document.getElementById('palette')!;
   speedInput = document.getElementById('speed-input') as HTMLInputElement;
@@ -191,8 +279,11 @@ export function mount() {
     if (file) handleFileUpload(file);
   });
 
-  // Image click
-  originalImage.addEventListener('click', handleImageClick);
+  // Rectangle selection on original image via pointer events (mouse + touch).
+  selectionOverlay.addEventListener('pointerdown', handlePointerDown);
+  selectionOverlay.addEventListener('pointermove', handlePointerMove);
+  selectionOverlay.addEventListener('pointerup', handlePointerUp);
+  selectionOverlay.addEventListener('pointercancel', handlePointerCancel);
 
   // Speed control
   speedInput.value = String(state.iterationMs);
@@ -228,6 +319,6 @@ export function mount() {
   let resizeTimer: ReturnType<typeof setTimeout>;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(applyLayout, 100);
+    resizeTimer = setTimeout(() => { applyLayout(); updateOverlaySize(); }, 100);
   });
 }

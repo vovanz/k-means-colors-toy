@@ -8,7 +8,7 @@ Upload an image and the app immediately begins clustering its pixels by color. A
 
 **Interaction:**
 
-- **Add a color** — click any pixel on the original image. A new cluster is seeded at that pixel's color and the algorithm continues from its current state without resetting.
+- **Add a color** — click or drag a rectangle on the original image (touch supported). All pixels within the selection are pre-assigned to a new cluster seeded at their average color; the first frame shows this state before any reassignment, then normal k-means stepping resumes. Any existing cluster that loses all its pixels to the selection is removed automatically.
 - **Remove a color** — hover over a palette swatch and click the × button. Pixels that belonged to that cluster are reassigned to the nearest remaining cluster, then the algorithm continues.
 - **Adjust speed** — change the iteration interval (default 100 ms) using the number input in the sidebar. Takes effect on the next iteration without restarting.
 - **Change image** — use the small "↻ Change image" button in the toolbar at any time.
@@ -54,7 +54,7 @@ Three presets with different `wH / wS / wL` weights are available and configurab
 
 Centroid positions are always averaged in RGB space regardless of the active metric. This is a pragmatic simplification — proper Lab or HSL means would require extra conversion steps.
 
-The initial state has a single cluster whose centroid is the average color of the entire image. Each click on the image adds one more cluster seeded at the clicked pixel's color.
+The initial state has a single cluster whose centroid is the average color of the entire image. Dragging a rectangle on the original image adds a new cluster from the selected region.
 
 ### Animation timing
 
@@ -94,10 +94,11 @@ src/
 The k-means algorithm (`kmeans.ts`) and the distance function (`distance.ts`) are entirely pure — no DOM access, no side effects, no global state. Every k-means function takes a state object and returns a new one:
 
 ```
-initState(pixels, initialCentroids) → KMeansState
-step(state)                         → KMeansState   (one full iteration)
-addCentroid(state, color)           → KMeansState
-reassignAfterDeletion(state, index) → KMeansState
+initState(pixels, initialCentroids)          → KMeansState
+step(state)                                  → KMeansState   (one full iteration)
+addCentroid(state, color)                    → KMeansState
+addCentroidFromSelection(state, pixelIndices) → KMeansState
+reassignAfterDeletion(state, index)          → KMeansState
 ```
 
 `animationLoop.ts` owns the timing and calls `step()` in a loop. It knows nothing about the DOM — it receives getter/setter closures for state and a callback to invoke after each frame. `app.ts` wires everything together and owns the single mutable state object.
@@ -118,9 +119,10 @@ File upload
               └─ wait / next tick
               └─ converged? stop.
 
-Image click
-  └─ addCentroid(state, clickedColor)
-  └─ resume loop if stopped
+Rectangle drag on original image
+  └─ addCentroidFromSelection(state, pixelIndices)
+  └─ immediate repaint (first frame, pre-step)
+  └─ resume loop
 
 Palette delete
   └─ reassignAfterDeletion(state, index)
