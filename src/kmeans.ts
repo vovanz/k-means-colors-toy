@@ -1,4 +1,4 @@
-import { type Color, distance } from './distance';
+import { type Color, type DistanceFn } from './distance';
 
 export interface KMeansState {
   pixels: Color[];
@@ -7,13 +7,13 @@ export interface KMeansState {
   converged: boolean;
 }
 
-function assignPixels(pixels: Color[], centroids: Color[]): Int32Array {
+function assignPixels(pixels: Color[], centroids: Color[], distanceFn: DistanceFn): Int32Array {
   const assignments = new Int32Array(pixels.length);
   for (let i = 0; i < pixels.length; i++) {
     let minDist = Infinity;
     let best = 0;
     for (let c = 0; c < centroids.length; c++) {
-      const d = distance(pixels[i], centroids[c]);
+      const d = distanceFn(pixels[i], centroids[c]);
       if (d < minDist) {
         minDist = d;
         best = c;
@@ -46,19 +46,14 @@ function recomputeCentroids(pixels: Color[], assignments: Int32Array, k: number)
   });
 }
 
-export function initState(pixels: Color[], initialCentroids: Color[]): KMeansState {
-  const assignments = assignPixels(pixels, initialCentroids);
-  return {
-    pixels,
-    centroids: initialCentroids,
-    assignments,
-    converged: false,
-  };
+export function initState(pixels: Color[], initialCentroids: Color[], distanceFn: DistanceFn): KMeansState {
+  const assignments = assignPixels(pixels, initialCentroids, distanceFn);
+  return { pixels, centroids: initialCentroids, assignments, converged: false };
 }
 
-export function step(state: KMeansState): KMeansState {
+export function step(state: KMeansState, distanceFn: DistanceFn): KMeansState {
   const newCentroids = recomputeCentroids(state.pixels, state.assignments, state.centroids.length);
-  const newAssignments = assignPixels(state.pixels, newCentroids);
+  const newAssignments = assignPixels(state.pixels, newCentroids, distanceFn);
 
   let converged = true;
   for (let i = 0; i < newAssignments.length; i++) {
@@ -68,12 +63,7 @@ export function step(state: KMeansState): KMeansState {
     }
   }
 
-  return {
-    pixels: state.pixels,
-    centroids: newCentroids,
-    assignments: newAssignments,
-    converged,
-  };
+  return { pixels: state.pixels, centroids: newCentroids, assignments: newAssignments, converged };
 }
 
 export function addCentroid(state: KMeansState, newColor: Color): KMeansState {
@@ -85,7 +75,11 @@ export function addCentroid(state: KMeansState, newColor: Color): KMeansState {
   };
 }
 
-export function reassignAfterDeletion(state: KMeansState, deletedIndex: number): KMeansState {
+export function reassignAfterDeletion(
+  state: KMeansState,
+  deletedIndex: number,
+  distanceFn: DistanceFn,
+): KMeansState {
   const newCentroids = state.centroids.filter((_, i) => i !== deletedIndex);
   if (newCentroids.length === 0) return state;
 
@@ -93,11 +87,10 @@ export function reassignAfterDeletion(state: KMeansState, deletedIndex: number):
   for (let i = 0; i < state.assignments.length; i++) {
     const old = state.assignments[i];
     if (old === deletedIndex) {
-      // Reassign to nearest remaining centroid
       let minDist = Infinity;
       let best = 0;
       for (let c = 0; c < newCentroids.length; c++) {
-        const d = distance(state.pixels[i], newCentroids[c]);
+        const d = distanceFn(state.pixels[i], newCentroids[c]);
         if (d < minDist) {
           minDist = d;
           best = c;
@@ -105,15 +98,15 @@ export function reassignAfterDeletion(state: KMeansState, deletedIndex: number):
       }
       newAssignments[i] = best;
     } else {
-      // Remap index accounting for deleted slot
       newAssignments[i] = old < deletedIndex ? old : old - 1;
     }
   }
 
-  return {
-    pixels: state.pixels,
-    centroids: newCentroids,
-    assignments: newAssignments,
-    converged: false,
-  };
+  return { pixels: state.pixels, centroids: newCentroids, assignments: newAssignments, converged: false };
+}
+
+/** Reassign all pixels under a new distance metric without changing centroids. */
+export function changeMetric(state: KMeansState, distanceFn: DistanceFn): KMeansState {
+  const newAssignments = assignPixels(state.pixels, state.centroids, distanceFn);
+  return { pixels: state.pixels, centroids: state.centroids, assignments: newAssignments, converged: false };
 }

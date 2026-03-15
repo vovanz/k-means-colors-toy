@@ -1,4 +1,5 @@
 import { type KMeansState, step } from './kmeans';
+import { type DistanceFn } from './distance';
 
 export interface LoopHandle {
   stop(): void;
@@ -10,6 +11,7 @@ export function startLoop(
   setState: (s: KMeansState) => void,
   onFrame: (s: KMeansState) => void,
   iterationMs: () => number,
+  getDistanceFn: () => DistanceFn,
 ): LoopHandle {
   let running = true;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -24,7 +26,7 @@ export function startLoop(
     }
 
     const t0 = performance.now();
-    const next = step(current);
+    const next = step(current, getDistanceFn());
     const elapsed = performance.now() - t0;
 
     setState(next);

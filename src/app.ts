@@ -1,15 +1,23 @@
-import { config } from './config';
-import { type Color } from './distance';
-import { type KMeansState, initState, addCentroid, reassignAfterDeletion } from './kmeans';
+import { config, hslPresets } from './config';
+import { type Color, type DistanceFn, rgbDistance, makeHslDistance, labDistance } from './distance';
+import { type KMeansState, initState, addCentroid, reassignAfterDeletion, changeMetric } from './kmeans';
 import { loadImageFromFile, resizeToMaxPixels, extractPixels, averageColor } from './imageUtils';
 import { renderClusters } from './canvasRenderer';
 import { renderPalette } from './paletteUI';
 import { type LoopHandle, startLoop } from './animationLoop';
 
+// All available distance metrics, built from config presets.
+const metrics: Array<{ label: string; fn: DistanceFn }> = [
+  { label: 'RGB',    fn: rgbDistance },
+  ...hslPresets.map(p => ({ label: p.label, fn: makeHslDistance(p.wH, p.wS, p.wL) })),
+  { label: 'CIELAB', fn: labDistance },
+];
+
 interface AppState {
   kmeans: KMeansState | null;
   loop: LoopHandle | null;
   iterationMs: number;
+  distanceFn: DistanceFn;
   imageWidth: number;
   imageHeight: number;
 }
@@ -18,6 +26,7 @@ const state: AppState = {
   kmeans: null,
   loop: null,
   iterationMs: config.defaultIterationMs,
+  distanceFn: rgbDistance,
   imageWidth: 0,
   imageHeight: 0,
 };
@@ -31,14 +40,6 @@ let speedInput: HTMLInputElement;
 
 // ── Layout ───────────────────────────────────────────────────────
 
-/**
- * Determines whether images should be placed side-by-side (horizontal) or
- * stacked (vertical) based on which arrangement wastes less viewport space.
- *
- * Side-by-side combined aspect ratio ≈ 2 × imgAspect.
- * Stacked combined aspect ratio      ≈ 0.5 × imgAspect.
- * Breakeven: screenAspect = 1.25 × imgAspect.
- */
 function computeLayout(imgAspect: number): 'horizontal' | 'vertical' {
   const screenAspect = window.innerWidth / window.innerHeight;
   return screenAspect > 1.25 * imgAspect ? 'horizontal' : 'vertical';
@@ -46,8 +47,7 @@ function computeLayout(imgAspect: number): 'horizontal' | 'vertical' {
 
 function applyLayout() {
   if (!state.imageWidth || !state.imageHeight) return;
-  const imgAspect = state.imageWidth / state.imageHeight;
-  workspace.dataset.layout = computeLayout(imgAspect);
+  workspace.dataset.layout = computeLayout(state.imageWidth / state.imageHeight);
 }
 
 // ── Rendering ────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ function ensureLoop() {
     (s) => { state.kmeans = s; },
     render,
     () => state.iterationMs,
+    () => state.distanceFn,
   );
 }
 
@@ -76,7 +77,7 @@ function handleDeleteColor(index: number) {
   if (state.kmeans.centroids.length <= 1) return;
 
   state.loop?.stop();
-  state.kmeans = reassignAfterDeletion(state.kmeans, index);
+  state.kmeans = reassignAfterDeletion(state.kmeans, index, state.distanceFn);
   render(state.kmeans);
   ensureLoop();
 }
@@ -93,8 +94,17 @@ function handleImageClick(event: MouseEvent) {
   const idx = y * state.imageWidth + x;
   if (idx < 0 || idx >= state.kmeans.pixels.length) return;
 
-  const clickedColor = state.kmeans.pixels[idx];
-  state.kmeans = addCentroid(state.kmeans, clickedColor);
+  state.kmeans = addCentroid(state.kmeans, state.kmeans.pixels[idx]);
+  ensureLoop();
+}
+
+function handleMetricChange(distanceFn: DistanceFn) {
+  state.distanceFn = distanceFn;
+  if (!state.kmeans) return;
+
+  state.loop?.stop();
+  state.kmeans = changeMetric(state.kmeans, distanceFn);
+  render(state.kmeans);
   ensureLoop();
 }
 
@@ -109,15 +119,13 @@ async function handleFileUpload(file: File) {
   state.imageWidth = resized.width;
   state.imageHeight = resized.height;
 
-  // Set CSS variable so layout rules can size images correctly via aspect-ratio.
   workspace.style.setProperty('--img-aspect-ratio', String(resized.width / resized.height));
 
   originalImage.src = resized.toDataURL();
-
   outputCanvas.width = resized.width;
   outputCanvas.height = resized.height;
 
-  state.kmeans = initState(pixels, [avgColor]);
+  state.kmeans = initState(pixels, [avgColor], state.distanceFn);
   render(state.kmeans);
 
   uploadPrompt.hidden = true;
@@ -137,6 +145,7 @@ export function mount() {
   paletteContainer = document.getElementById('palette')!;
   speedInput = document.getElementById('speed-input') as HTMLInputElement;
 
+  // File input
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
@@ -158,17 +167,29 @@ export function mount() {
     if (file) handleFileUpload(file);
   });
 
+  // Image click
   originalImage.addEventListener('click', handleImageClick);
 
+  // Speed control
   speedInput.value = String(state.iterationMs);
   speedInput.addEventListener('input', () => {
     const val = parseInt(speedInput.value, 10);
-    if (!isNaN(val) && val >= 10) {
-      state.iterationMs = val;
-    }
+    if (!isNaN(val) && val >= 10) state.iterationMs = val;
   });
 
-  // Recompute layout on resize (debounced)
+  // Metric selector — populate options from the metrics array
+  const metricSelect = document.getElementById('metric-select') as HTMLSelectElement;
+  for (const m of metrics) {
+    const opt = document.createElement('option');
+    opt.textContent = m.label;
+    metricSelect.appendChild(opt);
+  }
+  metricSelect.addEventListener('change', () => {
+    const m = metrics[metricSelect.selectedIndex];
+    if (m) handleMetricChange(m.fn);
+  });
+
+  // Window resize → recalculate layout
   let resizeTimer: ReturnType<typeof setTimeout>;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);

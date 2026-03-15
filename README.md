@@ -35,11 +35,24 @@ K-means partitions a set of points into *k* clusters by repeatedly doing two thi
 
 These two steps alternate until no point changes cluster (convergence).
 
-In this app the "points" are the image's pixels, represented as RGB triples `[R, G, B]`. Distance between two colors is the Euclidean distance in RGB space:
+In this app the "points" are the image's pixels, represented as RGB triples `[R, G, B]`. The distance metric is selectable at runtime; switching it immediately reassigns all pixels under the new metric and resumes the animation.
+
+### Distance metrics
+
+**RGB** — plain Euclidean distance in RGB space. Fast and simple.
+
+**HSL (cylindrical Euclidean)** — converts each color to HSL, maps hue onto a unit circle to handle the 359°→0° wrap-around correctly, then computes weighted Euclidean distance:
 
 ```
-distance(a, b) = sqrt((a.R-b.R)² + (a.G-b.G)² + (a.B-b.B)²)
+hx = cos(H × 2π),  hy = sin(H × 2π)
+d = sqrt(wH×((hxA-hxB)² + (hyA-hyB)²) + wS×(SA-SB)² + wL×(LA-LB)²)
 ```
+
+Three presets with different `wH / wS / wL` weights are available and configurable in `src/config.ts`.
+
+**CIELAB** — converts RGB → linear RGB → XYZ → L\*a\*b\* (D65 illuminant). Euclidean distance in Lab space correlates with perceived color difference better than either RGB or HSL.
+
+Centroid positions are always averaged in RGB space regardless of the active metric. This is a pragmatic simplification — proper Lab or HSL means would require extra conversion steps.
 
 The initial state has a single cluster whose centroid is the average color of the entire image. Each click on the image adds one more cluster seeded at the clicked pixel's color.
 
