@@ -81,6 +81,7 @@ let isDragging = false;
 // ── Layout ───────────────────────────────────────────────────────
 
 function computeLayout(imgAspect: number): "horizontal" | "vertical" {
+  if (window.innerWidth < 540) return "horizontal";
   const screenAspect = window.innerWidth / window.innerHeight;
   return screenAspect > 1.25 * imgAspect ? "horizontal" : "vertical";
 }
